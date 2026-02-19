@@ -1,0 +1,25 @@
+{
+  "name": "timebent-arena",
+  "version": "0.1.0",
+  "description": "Timebent - The Academy - an on-chain PVE and PVP arena with MagicBlock Ephemeral Rollups",
+  "scripts": {
+    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@magicblock-labs/ephemeral-rollups-sdk": "^0.5.0",
+    "@solana/web3.js": "^1.95.0",
+    "@solana/spl-token": "^0.4.0"
+  },
+  "devDependencies": {
+    "chai": "^4.3.4",
+    "mocha": "^10.0.0",
+    "ts-mocha": "^10.0.0",
+    "typescript": "^5.0.0",
+    "@types/bn.js": "^5.1.0",
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^10.0.0",
+    "prettier": "^3.0.0"
+  }
+}
