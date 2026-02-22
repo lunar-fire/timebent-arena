@@ -256,9 +256,10 @@ pub mod arena_match {
     }
 
     // ── 10. End match — commit + undelegate back to L1 ─────────────────────
+    // No status check — game server is trusted (authenticated via signer constraint).
+    // On-chain game actions are fire-and-forget so status may lag behind relay state.
     pub fn end_match(ctx: Context<EndMatch>, _match_id: u64) -> Result<()> {
         let m = &mut ctx.accounts.arena_match;
-        require!(m.status == MatchStatus::Complete, ArenaError::MatchNotComplete);
 
         let match_id = m.match_id;
         let winner = m.winner;
@@ -533,7 +534,8 @@ pub struct CloseMatch<'info> {
         seeds = [MATCH_SEED, &match_id.to_le_bytes()],
         bump,
         close = payer,
-        constraint = arena_match.status == MatchStatus::Complete || arena_match.status == MatchStatus::Cancelled @ ArenaError::InvalidMatchState,
+        // No status check — game server is trusted to close at any time.
+        // On-chain status may lag behind relay state due to fire-and-forget ER actions.
         constraint = payer.key() == arena_match.game_server @ ArenaError::UnauthorizedServer,
     )]
     pub arena_match: Account<'info, ArenaMatchState>,
@@ -547,7 +549,6 @@ pub struct ClosePlayerState<'info> {
     #[account(
         seeds = [MATCH_SEED, &match_id.to_le_bytes()],
         bump,
-        constraint = arena_match.status == MatchStatus::Complete || arena_match.status == MatchStatus::Cancelled @ ArenaError::InvalidMatchState,
         constraint = payer.key() == arena_match.game_server @ ArenaError::UnauthorizedServer,
     )]
     pub arena_match: Account<'info, ArenaMatchState>,
