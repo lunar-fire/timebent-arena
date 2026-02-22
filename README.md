@@ -44,11 +44,11 @@ Anchor Program IDL published and available at the [Anchor Program IDL tab](https
 | 7 | `forfeit` | game server | ER | Forfeit a disconnected player |
 | 8 | `delegate_match` | game server | L1 | Delegate match PDA to ER validator |
 | 9 | `delegate_player_state` | game server | L1 | Delegate player state PDA to ER |
-| 10 | `end_match` | game server | ER | Commit + undelegate back to L1 |
+| 10 | `end_match` | game server | ER | Commit + undelegate back to L1 (no status check) |
 | 11 | `create_player_state` | player | L1 | Create PlayerState PDA |
 | 12 | `cancel_match` | player1 | L1 | Cancel before anyone joins (closes PDA) |
-| 13 | `close_match` | game server | L1 | Close match PDA after Complete/Cancelled, reclaim rent |
-| 14 | `close_player_state` | game server | L1 | Close player state PDA, reclaim rent |
+| 13 | `close_match` | game server | L1 | Close match PDA, reclaim rent (no status check) |
+| 14 | `close_player_state` | game server | L1 | Close player state PDA, reclaim rent (no status check) |
 
 ## Match Lifecycle
 
@@ -160,6 +160,45 @@ Tests cover: match creation, player state creation, joining, round flow (input, 
 ```bash
 # After modifying the IDL file
 anchor idl upgrade --filepath target/idl/arena_match.json --provider.cluster devnet 45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi
+```
+
+## Design Notes
+
+### Server-Trusted Authority Model
+
+The API relay (`timebent-api/matchRelay.ts`) is the authoritative game server — it drives the 20Hz tick loop, validates damage, and determines round/match winners. The on-chain program records state for verifiability but does **not** enforce match outcome logic.
+
+All ER game action transactions (`erStartRound`, `erApplyDamage`, `erEndRound`) are sent **fire-and-forget** from the relay to maximize game loop performance. This means on-chain state may lag behind the relay's in-memory state at any given moment.
+
+Because of this:
+
+- **`end_match`** does not check `status == Complete`. The game server is authenticated via signer constraint and is trusted to decide when to settle. If we required `Complete`, the settlement would fail whenever fire-and-forget round-end transactions hadn't been confirmed on ER yet.
+- **`close_match` / `close_player_state`** do not check match status. The game server can close PDAs at any time after settlement to reclaim rent (~0.002 SOL per match).
+
+### ER Settlement Flow
+
+The `end_match` instruction uses the `#[commit]` macro which injects `magic_program` and `magic_context` accounts. Internally it calls `commit_and_undelegate_accounts` as a **CPI** to the MagicBlock Magic Program. This must be a CPI (not a top-level instruction) because the Magic Program needs to detect the parent program ID from the call stack.
+
+On the TypeScript side, the `#[commit]` macro injects accounts in this order:
+1. `magic_program` (`Magic11111111111111111111111111111111111111`)
+2. `magic_context` (`MagicContext1111111111111111111111111111111`)
+
+After `end_match` confirms on ER, the relay calls `GetCommitmentSignature()` from `@magicblock-labs/ephemeral-rollups-sdk` to await the L1 commitment signature. This parses the `"ScheduledCommitSent signature: ..."` log from the Magic Program's CPI response and waits for the corresponding L1 transaction to confirm.
+
+### ER Validator
+
+| Network | Validator | Endpoint |
+|---------|-----------|----------|
+| Devnet | `MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd` | `https://devnet-us.magicblock.app/` |
+
+### Match PDA Lifecycle on L1
+
+```
+create_match   -> PDA created, owned by arena program
+delegate_match -> PDA ownership transfers to DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh
+  [match plays on ER]
+end_match      -> commit + undelegate, PDA ownership returns to arena program
+close_match    -> PDA closed, rent returned to game server
 ```
 
 ## Key Files
