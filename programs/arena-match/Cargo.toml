@@ -1,7 +1,7 @@
 [package]
 name = "arena-match"
 version = "0.1.0"
-description = "Timebent Arena Match — on-chain PvP duels with MagicBlock Ephemeral Rollups"
+description = "Timebent - The Academy - an on-chain PVE and PVP arena with MagicBlock Ephemeral Rollups"
 edition = "2021"
 
 [lib]

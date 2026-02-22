@@ -224,27 +224,27 @@ pub mod arena_match {
     }
 
     // ── 8. Delegate match to ER ────────────────────────────────────────────
-    pub fn delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
+    pub fn delegate_match(ctx: Context<DelegateMatch>, match_id: u64) -> Result<()> {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
-            &[MATCH_SEED, &ctx.accounts.pda.match_id.to_le_bytes()],
+            &[MATCH_SEED, &match_id.to_le_bytes()],
             DelegateConfig {
                 validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
                 ..Default::default()
             },
         )?;
-        msg!("Match delegated to ER");
+        msg!("Match {} delegated to ER", match_id);
         Ok(())
     }
 
     // ── 9. Delegate player state to ER ─────────────────────────────────────
-    pub fn delegate_player_state(ctx: Context<DelegatePlayerState>) -> Result<()> {
+    pub fn delegate_player_state(ctx: Context<DelegatePlayerState>, match_id: u64, player: Pubkey) -> Result<()> {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
             &[
                 PLAYER_STATE_SEED,
-                &ctx.accounts.pda.match_id.to_le_bytes(),
-                ctx.accounts.pda.player.as_ref(),
+                &match_id.to_le_bytes(),
+                player.as_ref(),
             ],
             DelegateConfig {
                 validator: ctx.remaining_accounts.first().map(|acc| acc.key()),
@@ -301,6 +301,18 @@ pub mod arena_match {
             ArenaError::MatchAlreadyStarted
         );
         msg!("Match {} cancelled", m.match_id);
+        Ok(())
+    }
+
+    // ── 13. Close match PDA — reclaim rent after settlement ──────────────
+    pub fn close_match(_ctx: Context<CloseMatch>, _match_id: u64) -> Result<()> {
+        msg!("Match PDA closed, rent reclaimed");
+        Ok(())
+    }
+
+    // ── 14. Close player state PDA — reclaim rent after settlement ───────
+    pub fn close_player_state(_ctx: Context<ClosePlayerState>, _match_id: u64) -> Result<()> {
+        msg!("Player state PDA closed, rent reclaimed");
         Ok(())
     }
 }
@@ -466,21 +478,19 @@ pub struct CreatePlayerState<'info> {
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegateMatch<'info> {
-    #[account(mut)]
     pub payer: Signer<'info>,
-    /// CHECK: The match PDA to delegate
+    /// CHECK: The match PDA to delegate — unchecked per MagicBlock pattern
     #[account(mut, del)]
-    pub pda: Account<'info, ArenaMatchState>,
+    pub pda: AccountInfo<'info>,
 }
 
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegatePlayerState<'info> {
-    #[account(mut)]
     pub payer: Signer<'info>,
-    /// CHECK: The player state PDA to delegate
+    /// CHECK: The player state PDA to delegate — unchecked per MagicBlock pattern
     #[account(mut, del)]
-    pub pda: Account<'info, PlayerState>,
+    pub pda: AccountInfo<'info>,
 }
 
 #[commit]
@@ -513,6 +523,43 @@ pub struct CancelMatch<'info> {
     pub arena_match: Account<'info, ArenaMatchState>,
     #[account(mut)]
     pub player1: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(match_id: u64)]
+pub struct CloseMatch<'info> {
+    #[account(
+        mut,
+        seeds = [MATCH_SEED, &match_id.to_le_bytes()],
+        bump,
+        close = payer,
+        constraint = arena_match.status == MatchStatus::Complete || arena_match.status == MatchStatus::Cancelled @ ArenaError::InvalidMatchState,
+        constraint = payer.key() == arena_match.game_server @ ArenaError::UnauthorizedServer,
+    )]
+    pub arena_match: Account<'info, ArenaMatchState>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(match_id: u64)]
+pub struct ClosePlayerState<'info> {
+    #[account(
+        seeds = [MATCH_SEED, &match_id.to_le_bytes()],
+        bump,
+        constraint = arena_match.status == MatchStatus::Complete || arena_match.status == MatchStatus::Cancelled @ ArenaError::InvalidMatchState,
+        constraint = payer.key() == arena_match.game_server @ ArenaError::UnauthorizedServer,
+    )]
+    pub arena_match: Account<'info, ArenaMatchState>,
+    #[account(
+        mut,
+        seeds = [PLAYER_STATE_SEED, &match_id.to_le_bytes(), player_state.player.as_ref()],
+        bump,
+        close = payer,
+    )]
+    pub player_state: Account<'info, PlayerState>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

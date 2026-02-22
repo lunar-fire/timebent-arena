@@ -1,7 +1,7 @@
 {
   "name": "timebent-arena",
   "version": "0.1.0",
-  "description": "Timebent Arena — on-chain PvP duels with MagicBlock Ephemeral Rollups",
+  "description": "Timebent - The Academy - an on-chain PVE and PVP arena with MagicBlock Ephemeral Rollups",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"

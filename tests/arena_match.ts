@@ -276,6 +276,47 @@ function buildCancelMatchIx(
   });
 }
 
+function buildCloseMatchIx(
+  matchId: number,
+  payer: PublicKey,
+): anchor.web3.TransactionInstruction {
+  const [matchPda] = findMatchPda(matchId);
+  const data = Buffer.alloc(8 + 8);
+  disc("close_match").copy(data, 0);
+  data.writeBigUInt64LE(BigInt(matchId), 8);
+
+  return new anchor.web3.TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: matchPda, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+    ],
+    data,
+  });
+}
+
+function buildClosePlayerStateIx(
+  matchId: number,
+  player: PublicKey,
+  payer: PublicKey,
+): anchor.web3.TransactionInstruction {
+  const [matchPda] = findMatchPda(matchId);
+  const [playerStatePda] = findPlayerStatePda(matchId, player);
+  const data = Buffer.alloc(8 + 8);
+  disc("close_player_state").copy(data, 0);
+  data.writeBigUInt64LE(BigInt(matchId), 8);
+
+  return new anchor.web3.TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: matchPda, isSigner: false, isWritable: false },
+      { pubkey: playerStatePda, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+    ],
+    data,
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TESTS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -284,9 +325,9 @@ describe("arena-match", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  // Use provider wallet as "game server" for testing
+  // Use provider wallet as "game server" AND player1 for testing (avoids airdrop rate limits)
   const gameServer = (provider.wallet as anchor.Wallet).payer;
-  const player1 = Keypair.generate();
+  const player1 = gameServer; // game server acts as player1 (same as production flow)
   const player2 = Keypair.generate();
 
   let matchId: number;
@@ -294,16 +335,14 @@ describe("arena-match", () => {
   before(async () => {
     matchId = Math.floor(Math.random() * 1_000_000);
 
-    const airdropP1 = await provider.connection.requestAirdrop(
-      player1.publicKey,
-      2 * anchor.web3.LAMPORTS_PER_SOL
-    );
-    const airdropP2 = await provider.connection.requestAirdrop(
-      player2.publicKey,
-      2 * anchor.web3.LAMPORTS_PER_SOL
-    );
-    await provider.connection.confirmTransaction(airdropP1);
-    await provider.connection.confirmTransaction(airdropP2);
+    // Fund player2 via transfer from provider wallet (avoids faucet rate limits)
+    const transferIx = SystemProgram.transfer({
+      fromPubkey: gameServer.publicKey,
+      toPubkey: player2.publicKey,
+      lamports: 0.5 * anchor.web3.LAMPORTS_PER_SOL,
+    });
+    const tx = new anchor.web3.Transaction().add(transferIx);
+    await provider.sendAndConfirm(tx, [gameServer]);
   });
 
   // ── 1. Create match ───────────────────────────────────────────────────
@@ -530,5 +569,82 @@ describe("arena-match", () => {
       // Custom error for CannotJoinOwnMatch
       expect(err.toString()).to.include("0x1771");
     }
+  });
+
+  // ── 13. Close match rejects non-Complete match ──────────────────────
+
+  it("close_match rejects WaitingForPlayer match", async () => {
+    const closeTestId = matchId + 4;
+    const createIx = buildCreateMatchIx(closeTestId, gameServer.publicKey, gameServer.publicKey);
+    await provider.sendAndConfirm(new anchor.web3.Transaction().add(createIx), [gameServer]);
+
+    const closeIx = buildCloseMatchIx(closeTestId, gameServer.publicKey);
+    try {
+      await provider.sendAndConfirm(new anchor.web3.Transaction().add(closeIx), [gameServer]);
+      expect.fail("Should have failed with InvalidMatchState");
+    } catch (err: any) {
+      expect(err.toString()).to.include("Simulation failed");
+    }
+
+    // Clean up
+    const cancelIx = buildCancelMatchIx(closeTestId, gameServer.publicKey);
+    await provider.sendAndConfirm(new anchor.web3.Transaction().add(cancelIx), [gameServer]);
+  });
+
+  // ── 14. Close match + player states after Complete ──────────────────
+
+  it("game server closes player states then match after completion", async () => {
+    // The main match (matchId) is Complete from test #9. Use it directly.
+    const [matchPda] = findMatchPda(matchId);
+    const [ps1Pda] = findPlayerStatePda(matchId, player1.publicKey);
+    const [ps2Pda] = findPlayerStatePda(matchId, player2.publicKey);
+
+    // Verify match is still there and Complete
+    let matchAcct = await provider.connection.getAccountInfo(matchPda);
+    expect(matchAcct).to.not.be.null;
+    const state = decodeMatchState(matchAcct!.data);
+    expect(state.status).to.equal(4); // Complete
+
+    // Track balance before
+    const balBefore = await provider.connection.getBalance(gameServer.publicKey);
+
+    // Close player states first (reads arena_match for auth)
+    const closePs1 = buildClosePlayerStateIx(matchId, player1.publicKey, gameServer.publicKey);
+    const closePs2 = buildClosePlayerStateIx(matchId, player2.publicKey, gameServer.publicKey);
+    const closeMatch = buildCloseMatchIx(matchId, gameServer.publicKey);
+
+    // All three in one transaction
+    const tx = new anchor.web3.Transaction().add(closePs1).add(closePs2).add(closeMatch);
+    await provider.sendAndConfirm(tx, [gameServer]);
+
+    // Verify all PDAs are gone
+    const ps1After = await provider.connection.getAccountInfo(ps1Pda);
+    const ps2After = await provider.connection.getAccountInfo(ps2Pda);
+    const matchAfter = await provider.connection.getAccountInfo(matchPda);
+
+    expect(ps1After).to.be.null;
+    expect(ps2After).to.be.null;
+    expect(matchAfter).to.be.null;
+
+    // Verify rent was reclaimed (balance increased minus tx fee)
+    const balAfter = await provider.connection.getBalance(gameServer.publicKey);
+    expect(balAfter).to.be.greaterThan(balBefore - 10000); // Allow for tx fee
+  });
+
+  // ── 15. Close match after forfeit ───────────────────────────────────
+
+  it("game server closes match after forfeit", async () => {
+    // The forfeit match (matchId + 2) is Complete from test #11
+    const forfeitMatchId = matchId + 2;
+    const [matchPda] = findMatchPda(forfeitMatchId);
+
+    let acct = await provider.connection.getAccountInfo(matchPda);
+    expect(acct).to.not.be.null;
+
+    const closeIx = buildCloseMatchIx(forfeitMatchId, gameServer.publicKey);
+    await provider.sendAndConfirm(new anchor.web3.Transaction().add(closeIx), [gameServer]);
+
+    acct = await provider.connection.getAccountInfo(matchPda);
+    expect(acct).to.be.null;
   });
 });

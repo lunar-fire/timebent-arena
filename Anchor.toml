@@ -18,7 +18,7 @@ arena_match = "45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
