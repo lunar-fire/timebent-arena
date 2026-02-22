@@ -1,6 +1,6 @@
 # Timebent Arena
 
-Solana Anchor program for Timebent - The Academy - an on-chain PVE and PVP arena with MagicBlock Ephemeral Rollups, powered by [MagicBlock Ephemeral Rollups](https://docs.magicblock.gg/) for real-time gameplay.
+Solana Anchor program for Timebent - The Academy - an on-chain PVE and PVP arena, powered by [MagicBlock Ephemeral Rollups](https://docs.magicblock.gg/) for real-time gameplay.
 
 This repo contains the smart contract only. It is **not** a deployable service — it compiles to a Solana BPF program and is deployed directly to the blockchain.
 
@@ -27,7 +27,9 @@ The API relay (`timebent-api`) builds and submits transactions to this program v
 45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi
 ```
 
-Deployed on devnet. IDL published at `C2Z5YLFML6VL3othGbCmadDMe2kbk2rdnmCdh4WDGW5g`.
+[View on Solscan (devnet)](https://solscan.io/account/45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi?cluster=devnet)
+
+Anchor Program IDL published and available at the [Anchor Program IDL tab](https://solscan.io/account/45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi?cluster=devnet#anchorProgramIdl).
 
 ## Instructions
 
