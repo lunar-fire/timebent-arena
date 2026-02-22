@@ -1,5 +1,7 @@
 # Timebent Arena
 
+[timebent.xyz](https://www.timebent.xyz/) | [𝕏 @TimebentGame](https://x.com/TimebentGame)
+
 Solana Anchor program for Timebent - The Academy - an on-chain PVE and PVP arena, powered by [MagicBlock Ephemeral Rollups](https://docs.magicblock.gg/) for real-time gameplay.
 
 This repo contains the smart contract only. It is **not** a deployable service — it compiles to a Solana BPF program and is deployed directly to the blockchain.
