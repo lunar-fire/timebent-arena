@@ -835,6 +835,391 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "create_derby",
+      "discriminator": [
+        36,
+        168,
+        234,
+        16,
+        122,
+        107,
+        114,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "derby_race",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  114,
+                  98,
+                  121,
+                  95,
+                  114,
+                  97,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "race_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "game_server"
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "race_id",
+          "type": "u64"
+        },
+        {
+          "name": "vrf_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate_derby",
+      "discriminator": [
+        87,
+        172,
+        75,
+        40,
+        23,
+        88,
+        7,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "pda",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "start_derby",
+      "discriminator": [
+        162,
+        31,
+        130,
+        63,
+        171,
+        114,
+        241,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "derby_race",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  114,
+                  98,
+                  121,
+                  95,
+                  114,
+                  97,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "race_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "game_server",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "race_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "submit_derby_input",
+      "discriminator": [
+        139,
+        25,
+        152,
+        173,
+        34,
+        84,
+        129,
+        213
+      ],
+      "accounts": [
+        {
+          "name": "derby_race",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  114,
+                  98,
+                  121,
+                  95,
+                  114,
+                  97,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "race_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "race_id",
+          "type": "u64"
+        },
+        {
+          "name": "tick",
+          "type": "u32"
+        },
+        {
+          "name": "dx",
+          "type": "i8"
+        },
+        {
+          "name": "dy",
+          "type": "i8"
+        }
+      ]
+    },
+    {
+      "name": "derby_server_update",
+      "discriminator": [
+        238,
+        235,
+        68,
+        208,
+        121,
+        188,
+        230,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "derby_race",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  114,
+                  98,
+                  121,
+                  95,
+                  114,
+                  97,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "race_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "game_server",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "race_id",
+          "type": "u64"
+        },
+        {
+          "name": "action",
+          "type": {
+            "defined": {
+              "name": "DerbyAction"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "end_derby",
+      "discriminator": [
+        61,
+        154,
+        161,
+        171,
+        107,
+        244,
+        29,
+        95
+      ],
+      "accounts": [
+        {
+          "name": "derby_race",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  114,
+                  98,
+                  121,
+                  95,
+                  114,
+                  97,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "race_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "race_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "close_derby",
+      "discriminator": [
+        86,
+        165,
+        180,
+        33,
+        203,
+        208,
+        100,
+        51
+      ],
+      "accounts": [
+        {
+          "name": "derby_race",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  114,
+                  98,
+                  121,
+                  95,
+                  114,
+                  97,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "race_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "race_id",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -862,6 +1247,19 @@
         16,
         244,
         195
+      ]
+    },
+    {
+      "name": "DerbyRaceState",
+      "discriminator": [
+        241,
+        99,
+        247,
+        25,
+        116,
+        38,
+        171,
+        182
       ]
     }
   ],
@@ -915,6 +1313,56 @@
       "code": 6009,
       "name": "UnauthorizedPlayer",
       "msg": "Unauthorized player"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidDerbyState",
+      "msg": "Invalid derby state for this action"
+    },
+    {
+      "code": 6011,
+      "name": "RaceNotActive",
+      "msg": "Race is not active"
+    },
+    {
+      "code": 6012,
+      "name": "RaceNotFinished",
+      "msg": "Race is not finished or cancelled"
+    },
+    {
+      "code": 6013,
+      "name": "RaceTimedOut",
+      "msg": "Race timed out"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidItemIndex",
+      "msg": "Invalid item index"
+    },
+    {
+      "code": 6015,
+      "name": "ItemAlreadyCollected",
+      "msg": "Item already collected"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidCheckpoint",
+      "msg": "Invalid checkpoint ID"
+    },
+    {
+      "code": 6017,
+      "name": "MissingCheckpoints",
+      "msg": "Not all checkpoints passed"
+    },
+    {
+      "code": 6018,
+      "name": "LapsNotComplete",
+      "msg": "Not all laps complete"
+    },
+    {
+      "code": 6019,
+      "name": "DerbyUnauthorizedServer",
+      "msg": "Unauthorized game server"
     }
   ],
   "types": [
@@ -1035,6 +1483,91 @@
       }
     },
     {
+      "name": "DerbyRaceState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "race_id",
+            "type": "u64"
+          },
+          {
+            "name": "game_server",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "vrf_seed",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "DerbyStatus"
+              }
+            }
+          },
+          {
+            "name": "current_tick",
+            "type": "u32"
+          },
+          {
+            "name": "current_lap",
+            "type": "u8"
+          },
+          {
+            "name": "checkpoints_passed",
+            "type": "u8"
+          },
+          {
+            "name": "collisions",
+            "type": "u16"
+          },
+          {
+            "name": "gold_collected",
+            "type": "u8"
+          },
+          {
+            "name": "boosts_collected",
+            "type": "u8"
+          },
+          {
+            "name": "boost_end_tick",
+            "type": "u32"
+          },
+          {
+            "name": "finish_tick",
+            "type": "u32"
+          },
+          {
+            "name": "gold_bitmask",
+            "type": "u16"
+          },
+          {
+            "name": "boost_bitmask",
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "settled_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "MatchStatus",
       "type": {
         "kind": "enum",
@@ -1056,6 +1589,70 @@
           },
           {
             "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DerbyStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Created"
+          },
+          {
+            "name": "Racing"
+          },
+          {
+            "name": "Finished"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DerbyAction",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "RecordCollision"
+          },
+          {
+            "name": "CollectGold",
+            "fields": [
+              {
+                "name": "item_index",
+                "type": "u8"
+              }
+            ]
+          },
+          {
+            "name": "CollectBoost",
+            "fields": [
+              {
+                "name": "item_index",
+                "type": "u8"
+              }
+            ]
+          },
+          {
+            "name": "PassCheckpoint",
+            "fields": [
+              {
+                "name": "checkpoint_id",
+                "type": "u8"
+              }
+            ]
+          },
+          {
+            "name": "CompleteLap"
+          },
+          {
+            "name": "FinishRace"
           }
         ]
       }

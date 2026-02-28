@@ -52,6 +52,18 @@ Anchor Program IDL published and available at the [Anchor Program IDL tab](https
 | 13 | `close_match` | game server | L1 | Close match PDA, reclaim rent (no status check) |
 | 14 | `close_player_state` | game server | L1 | Close player state PDA, reclaim rent (no status check) |
 
+### Derby Instructions
+
+| # | Instruction | Signer | Where | Purpose |
+|---|-------------|--------|-------|---------|
+| D1 | `create_derby` | player | L1 | Create DerbyRaceState PDA |
+| D2 | `delegate_derby` | game server | L1 | Delegate derby PDA to ER validator |
+| D3 | `start_derby` | game server | ER | Start race (Created -> Racing) |
+| D4 | `submit_derby_input` | player (or session key) | ER | Player movement input |
+| D5 | `derby_server_update` | game server | ER | Server records collisions, pickups, checkpoints, laps, finish |
+| D6 | `end_derby` | game server | ER | Commit + undelegate back to L1 |
+| D7 | `close_derby` | game server | L1 | Close derby PDA, reclaim rent |
+
 ## Match Lifecycle
 
 ```
@@ -65,6 +77,18 @@ create_match (L1)
   -> end_match (ER -> L1, commit + undelegate)
   -> close_player_state (L1, reclaim rent)
   -> close_match (L1, reclaim rent)
+```
+
+## Derby Lifecycle
+
+```
+create_derby (L1)
+  -> delegate_derby (L1 -> ER)
+  -> start_derby (ER)
+  -> [submit_derby_input / derby_server_update loop] (ER)
+  -> derby_server_update(FinishRace) (ER)
+  -> end_derby (ER -> L1, commit + undelegate)
+  -> close_derby (L1, reclaim rent)
 ```
 
 ## Account Types
@@ -103,6 +127,28 @@ create_match (L1)
 | last_tick | u32 | Last input tick |
 | input_count | u64 | Total inputs submitted |
 
+### DerbyRaceState (PDA: `["derby_race", race_id_le_bytes]`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| race_id | u64 | Unique race identifier |
+| game_server | Pubkey | Authority for server-only actions |
+| player | Pubkey | The racing player |
+| vrf_seed | [u8; 32] | VRF seed for deterministic obstacle/item placement |
+| status | DerbyStatus | Created / Racing / Finished / Cancelled |
+| current_tick | u32 | Latest tick received |
+| current_lap | u8 | Laps completed (0-3) |
+| checkpoints_passed | u8 | Bitmask of checkpoints passed this lap (4 bits) |
+| collisions | u16 | Total obstacle collisions |
+| gold_collected | u8 | Total gold coins collected |
+| boosts_collected | u8 | Total speed boosts collected |
+| boost_end_tick | u32 | Tick when current boost expires |
+| finish_tick | u32 | Tick when race finished |
+| gold_bitmask | u16 | Which gold coins collected (15 bits) |
+| boost_bitmask | u8 | Which boosts collected (8 bits) |
+| created_at | i64 | Unix timestamp |
+| settled_at | i64 | Unix timestamp when race finished |
+
 ## Game Constants
 
 | Constant | Value | Description |
@@ -112,6 +158,55 @@ create_match (L1)
 | HP_PER_ROUND | 3 | Health per round |
 | ROUND_TICKS | 1200 | 60 seconds at 20Hz |
 | DAMAGE_COOLDOWN_TICKS | 10 | ~500ms between hits |
+
+### Derby Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| DERBY_MAX_LAPS | 3 | Laps to complete |
+| DERBY_CHECKPOINT_COUNT | 4 | Checkpoints per lap |
+| DERBY_MAX_OBSTACLES | 10 | Max obstacles on track |
+| DERBY_MAX_BOOSTS | 8 | Max speed boosts on track |
+| DERBY_MAX_GOLD | 15 | Max gold coins on track |
+| DERBY_MAX_TICKS | 6000 | 5 minutes at 20Hz |
+| DERBY_BOOST_DURATION_TICKS | 100 | 5 seconds at 20Hz |
+
+### DerbyStatus
+
+| Variant | Value | Description |
+|---------|-------|-------------|
+| Created | 0 | On L1, awaiting delegation |
+| Racing | 1 | Active on ER |
+| Finished | 2 | Race complete |
+| Cancelled | 3 | Race cancelled |
+
+### DerbyAction
+
+| Variant | Fields | Description |
+|---------|--------|-------------|
+| RecordCollision | — | Player hit an obstacle |
+| CollectGold | item_index: u8 | Collect gold coin (0-14) |
+| CollectBoost | item_index: u8 | Collect speed boost (0-7) |
+| PassCheckpoint | checkpoint_id: u8 | Pass checkpoint (0-3) |
+| CompleteLap | — | Complete a lap (requires all 4 checkpoints) |
+| FinishRace | — | Finish race (requires 3 laps complete) |
+
+### DerbyError
+
+| Code | Name | Description |
+|------|------|-------------|
+| 6010 | InvalidDerbyState | Wrong status for this action |
+| 6011 | RaceNotActive | Race is not in Racing status |
+| 6012 | RaceNotFinished | Race is not Finished or Cancelled |
+| 6013 | RaceTimedOut | Input tick exceeds DERBY_MAX_TICKS |
+| 6014 | InvalidItemIndex | Item index out of range |
+| 6015 | ItemAlreadyCollected | Gold/boost already collected |
+| 6016 | InvalidCheckpoint | Checkpoint ID out of range |
+| 6017 | MissingCheckpoints | Not all checkpoints passed for lap |
+| 6018 | LapsNotComplete | Not all 3 laps complete for finish |
+| 6019 | UnauthorizedServer | Signer is not the game server |
+
+> **Note:** Anchor assigns each `#[error_code]` enum codes starting from 6000 independently. The actual program emits 6000-6009 for DerbyError (same range as ArenaError). The IDL uses 6010-6019 to avoid duplicate code numbers. Match errors by name, not code.
 
 ## Dependencies
 
@@ -155,7 +250,7 @@ solana program show 45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi --url devnet
 anchor test --provider.cluster devnet --skip-deploy --skip-build
 ```
 
-Tests cover: match creation, player state creation, joining, round flow (input, damage, cooldown enforcement), round completion, match completion, cancellation, forfeit, close/rent reclamation, and error cases.
+Tests cover: match creation, player state creation, joining, round flow (input, damage, cooldown enforcement), round completion, match completion, cancellation, forfeit, close/rent reclamation, derby race creation, start, input, collisions, gold/boost collection, checkpoints, lap completion, full 3-lap race, and error cases.
 
 ### Update IDL on-chain
 
@@ -209,7 +304,8 @@ close_match    -> PDA closed, rent returned to game server
 |------|---------|
 | `programs/arena-match/src/lib.rs` | Program source (instructions, accounts, constraints) |
 | `target/idl/arena_match.json` | Manually maintained IDL (published on-chain) |
-| `tests/arena_match.ts` | E2E tests |
+| `tests/arena_match.ts` | Arena E2E tests |
+| `tests/derby_race.ts` | Derby E2E tests |
 | `keys/arena-match-keypair.json` | Program deploy keypair |
 | `Anchor.toml` | Anchor configuration |
 
