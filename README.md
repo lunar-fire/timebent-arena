@@ -35,6 +35,8 @@ Anchor Program IDL published and available at the [Anchor Program IDL tab](https
 
 ## Instructions
 
+### Arena Instructions
+
 | # | Instruction | Signer | Where | Purpose |
 |---|-------------|--------|-------|---------|
 | 1 | `create_match` | game server | L1 | Create ArenaMatchState PDA |
@@ -56,13 +58,13 @@ Anchor Program IDL published and available at the [Anchor Program IDL tab](https
 
 | # | Instruction | Signer | Where | Purpose |
 |---|-------------|--------|-------|---------|
-| D1 | `create_derby` | player | L1 | Create DerbyRaceState PDA |
-| D2 | `delegate_derby` | game server | L1 | Delegate derby PDA to ER validator |
-| D3 | `start_derby` | game server | ER | Start race (Created -> Racing) |
-| D4 | `submit_derby_input` | player (or session key) | ER | Player movement input |
-| D5 | `derby_server_update` | game server | ER | Server records collisions, pickups, checkpoints, laps, finish |
-| D6 | `end_derby` | game server | ER | Commit + undelegate back to L1 |
-| D7 | `close_derby` | game server | L1 | Close derby PDA, reclaim rent |
+| 15 | `create_derby` | player | L1 | Create DerbyRaceState PDA |
+| 16 | `delegate_derby` | game server | L1 | Delegate derby PDA to ER validator |
+| 17 | `start_derby` | game server | ER | Start race (Created -> Racing) |
+| 18 | `submit_derby_input` | player (or session key) | ER | Player movement input |
+| 19 | `derby_server_update` | game server | ER | Server records collisions, pickups, checkpoints, laps, finish |
+| 20 | `end_derby` | game server | ER | Commit + undelegate back to L1 |
+| 21 | `close_derby` | game server | L1 | Close derby PDA, reclaim rent |
 
 ## Match Lifecycle
 
