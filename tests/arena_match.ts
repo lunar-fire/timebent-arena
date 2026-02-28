@@ -571,24 +571,23 @@ describe("arena-match", () => {
     }
   });
 
-  // ── 13. Close match rejects non-Complete match ──────────────────────
+  // ── 13. Game server can close match in any state (no status check) ──
 
-  it("close_match rejects WaitingForPlayer match", async () => {
+  it("game server can close match in any state", async () => {
     const closeTestId = matchId + 4;
     const createIx = buildCreateMatchIx(closeTestId, gameServer.publicKey, gameServer.publicKey);
     await provider.sendAndConfirm(new anchor.web3.Transaction().add(createIx), [gameServer]);
 
-    const closeIx = buildCloseMatchIx(closeTestId, gameServer.publicKey);
-    try {
-      await provider.sendAndConfirm(new anchor.web3.Transaction().add(closeIx), [gameServer]);
-      expect.fail("Should have failed with InvalidMatchState");
-    } catch (err: any) {
-      expect(err.toString()).to.include("Simulation failed");
-    }
+    const [matchPda] = findMatchPda(closeTestId);
+    let acct = await provider.connection.getAccountInfo(matchPda);
+    expect(acct).to.not.be.null;
 
-    // Clean up
-    const cancelIx = buildCancelMatchIx(closeTestId, gameServer.publicKey);
-    await provider.sendAndConfirm(new anchor.web3.Transaction().add(cancelIx), [gameServer]);
+    // close_match has no status check — server is trusted
+    const closeIx = buildCloseMatchIx(closeTestId, gameServer.publicKey);
+    await provider.sendAndConfirm(new anchor.web3.Transaction().add(closeIx), [gameServer]);
+
+    acct = await provider.connection.getAccountInfo(matchPda);
+    expect(acct).to.be.null;
   });
 
   // ── 14. Close match + player states after Complete ──────────────────
