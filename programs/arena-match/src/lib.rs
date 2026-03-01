@@ -468,12 +468,11 @@ pub mod arena_match {
     }
 
     // ── D6. End derby — commit + undelegate back to L1 ───────────────────
+    // No status check — matches arena's end_match pattern.
+    // Game server is trusted to decide when to settle (fire-and-forget events
+    // may not have confirmed on ER yet).
     pub fn end_derby(ctx: Context<EndDerby>, _race_id: u64) -> Result<()> {
         let d = &mut ctx.accounts.derby_race;
-        require!(
-            d.status == DerbyStatus::Finished || d.status == DerbyStatus::Cancelled,
-            DerbyError::RaceNotFinished
-        );
 
         let race_id = d.race_id;
         let finish_tick = d.finish_tick;
@@ -492,12 +491,28 @@ pub mod arena_match {
     }
 
     // ── D7. Close derby — reclaim rent after settlement ──────────────────
-    pub fn close_derby(ctx: Context<CloseDerby>, _race_id: u64) -> Result<()> {
+    // No status check — matches arena's close_match pattern.
+    // Game server can close PDA at any time to reclaim rent.
+    // Emits a SHA256 result hash before closing for permanent verifiability
+    // (tx logs survive PDA deletion).
+    pub fn close_derby(ctx: Context<CloseDerby>, _race_id: u64, finish_tick: u32) -> Result<()> {
         let d = &ctx.accounts.derby_race;
-        require!(
-            d.status == DerbyStatus::Finished || d.status == DerbyStatus::Cancelled,
-            DerbyError::RaceNotFinished
-        );
+
+        // Build deterministic byte representation of race result
+        let mut data = Vec::with_capacity(85);
+        data.extend_from_slice(&d.race_id.to_le_bytes());
+        data.extend_from_slice(d.player.as_ref());
+        data.extend_from_slice(&d.vrf_seed);
+        data.extend_from_slice(&finish_tick.to_le_bytes());
+        data.extend_from_slice(&[d.current_lap]);
+        data.extend_from_slice(&d.collisions.to_le_bytes());
+        data.extend_from_slice(&[d.gold_collected]);
+        data.extend_from_slice(&[d.boosts_collected]);
+        data.extend_from_slice(&d.gold_bitmask.to_le_bytes());
+        data.extend_from_slice(&[d.boost_bitmask]);
+
+        let hash = solana_sha256_hasher::hash(&data);
+        msg!("Derby {} result: hash={}", d.race_id, hash);
         msg!("Derby {} closed, rent reclaimed", d.race_id);
         Ok(())
     }

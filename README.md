@@ -63,8 +63,8 @@ Anchor Program IDL published and available at the [Anchor Program IDL tab](https
 | 17 | `start_derby` | game server | ER | Start race (Created -> Racing) |
 | 18 | `submit_derby_input` | player (or session key) | ER | Player movement input |
 | 19 | `derby_server_update` | game server | ER | Server records collisions, pickups, checkpoints, laps, finish |
-| 20 | `end_derby` | game server | ER | Commit + undelegate back to L1 |
-| 21 | `close_derby` | game server | L1 | Close derby PDA, reclaim rent |
+| 20 | `end_derby` | game server | ER | Commit + undelegate back to L1 (no status check) |
+| 21 | `close_derby` | game server | L1 | Emit result hash, close PDA, reclaim rent (no status check) |
 
 ## Match Lifecycle
 
@@ -90,7 +90,7 @@ create_derby (L1)
   -> [submit_derby_input / derby_server_update loop] (ER)
   -> derby_server_update(FinishRace) (ER)
   -> end_derby (ER -> L1, commit + undelegate)
-  -> close_derby (L1, reclaim rent)
+  -> close_derby (L1, emit result hash, reclaim rent)
 ```
 
 ## Account Types
@@ -217,6 +217,8 @@ create_derby (L1)
 | anchor-lang | 0.32.1 | Solana framework |
 | ephemeral-rollups-sdk | 0.8.0 | MagicBlock ER delegation/commit |
 | session-keys | 3.0.10 | Session key authentication |
+| solana-sha256-hasher | 3.1.0 | SHA256 hashing for result hash |
+| solana-hash | 2.3.0 | Hash type for solana-sha256-hasher |
 
 ## Development
 
@@ -289,6 +291,32 @@ After `end_match` confirms on ER, the relay calls `GetCommitmentSignature()` fro
 | Network | Validator | Endpoint |
 |---------|-----------|----------|
 | Devnet | `MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd` | `https://devnet-us.magicblock.app/` |
+
+### Derby Result Hash Verification
+
+When `close_derby` is called, the program computes a SHA256 hash of the race result fields and emits it as a program log before closing the PDA. Since Solana transaction logs are permanent (even after account deletion), this provides a verifiable proof of race results.
+
+**Hash inputs** (deterministic byte concatenation):
+
+| Field | Type | Source |
+|-------|------|--------|
+| race_id | u64 LE | PDA |
+| player | 32 bytes | PDA |
+| vrf_seed | 32 bytes | PDA |
+| finish_tick | u32 LE | Instruction arg (server-asserted) |
+| current_lap | u8 | PDA |
+| collisions | u16 LE | PDA |
+| gold_collected | u8 | PDA |
+| boosts_collected | u8 | PDA |
+| gold_bitmask | u16 LE | PDA |
+| boost_bitmask | u8 | PDA |
+
+**Log format:**
+```
+Program log: Derby <race_id> result: hash=<base58_hash>
+```
+
+**Verification:** To verify a race result, reconstruct the byte buffer from stored race data, compute SHA256, and compare the base58 hash against the `close_derby` transaction logs on Solscan (Instruction Details → Program Logs).
 
 ### Match PDA Lifecycle on L1
 
