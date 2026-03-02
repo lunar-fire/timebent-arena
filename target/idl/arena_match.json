@@ -1222,6 +1222,18 @@
         {
           "name": "finish_tick",
           "type": "u32"
+        },
+        {
+          "name": "gold_collected",
+          "type": "u8"
+        },
+        {
+          "name": "gold_bitmask",
+          "type": "u16"
+        },
+        {
+          "name": "boost_bitmask",
+          "type": "u8"
         }
       ]
     }

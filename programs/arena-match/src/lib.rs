@@ -495,10 +495,19 @@ pub mod arena_match {
     // Game server can close PDA at any time to reclaim rent.
     // Emits a SHA256 result hash before closing for permanent verifiability
     // (tx logs survive PDA deletion).
-    pub fn close_derby(ctx: Context<CloseDerby>, _race_id: u64, finish_tick: u32) -> Result<()> {
+    pub fn close_derby(
+        ctx: Context<CloseDerby>,
+        _race_id: u64,
+        finish_tick: u32,
+        gold_collected: u8,
+        gold_bitmask: u16,
+        boost_bitmask: u8,
+    ) -> Result<()> {
         let d = &ctx.accounts.derby_race;
 
-        // Build deterministic byte representation of race result
+        // Build deterministic byte representation of race result.
+        // finish_tick, gold_collected, gold_bitmask, boost_bitmask are passed as
+        // args because the ER→L1 commit does not reliably propagate these fields.
         let mut data = Vec::with_capacity(85);
         data.extend_from_slice(&d.race_id.to_le_bytes());
         data.extend_from_slice(d.player.as_ref());
@@ -506,10 +515,10 @@ pub mod arena_match {
         data.extend_from_slice(&finish_tick.to_le_bytes());
         data.extend_from_slice(&[d.current_lap]);
         data.extend_from_slice(&d.collisions.to_le_bytes());
-        data.extend_from_slice(&[d.gold_collected]);
+        data.extend_from_slice(&[gold_collected]);
         data.extend_from_slice(&[d.boosts_collected]);
-        data.extend_from_slice(&d.gold_bitmask.to_le_bytes());
-        data.extend_from_slice(&[d.boost_bitmask]);
+        data.extend_from_slice(&gold_bitmask.to_le_bytes());
+        data.extend_from_slice(&[boost_bitmask]);
 
         let hash = solana_sha256_hasher::hash(&data);
         msg!("Derby {} result: hash={}", d.race_id, hash);

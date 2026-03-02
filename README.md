@@ -303,13 +303,13 @@ When `close_derby` is called, the program computes a SHA256 hash of the race res
 | race_id | u64 LE | PDA |
 | player | 32 bytes | PDA |
 | vrf_seed | 32 bytes | PDA |
-| finish_tick | u32 LE | Instruction arg (server-asserted) |
+| finish_tick | u32 LE | Instruction arg (ER→L1 commit unreliable) |
 | current_lap | u8 | PDA |
 | collisions | u16 LE | PDA |
-| gold_collected | u8 | PDA |
+| gold_collected | u8 | Instruction arg (ER→L1 commit unreliable) |
 | boosts_collected | u8 | PDA |
-| gold_bitmask | u16 LE | PDA |
-| boost_bitmask | u8 | PDA |
+| gold_bitmask | u16 LE | Instruction arg (ER→L1 commit unreliable) |
+| boost_bitmask | u8 | Instruction arg (ER→L1 commit unreliable) |
 
 **Log format:**
 ```
