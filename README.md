@@ -279,14 +279,15 @@ anchor idl upgrade --filepath target/idl/arena_match.json --provider.cluster dev
 
 ### Server-Trusted Authority Model
 
-The API relay (`timebent-api/matchRelay.ts`) is the authoritative game server — it drives the 20Hz tick loop, validates damage, and determines round/match winners. The on-chain program records state for verifiability but does **not** enforce match outcome logic.
+The API relay (`timebent-api`) is the authoritative game server for both Arena and Derby. The on-chain program records state for verifiability but does **not** enforce match/race outcome logic — the game server is authenticated via signer constraint and trusted to drive gameplay.
 
-All ER game action transactions (`erStartRound`, `erApplyDamage`, `erEndRound`) are sent **fire-and-forget** from the relay to maximize game loop performance. This means on-chain state may lag behind the relay's in-memory state at any given moment.
+**Arena** (`matchRelay.ts`): The server drives a 20Hz tick loop. All ER transactions (`erStartRound`, `erApplyDamage`, `erEndRound`) are sent **fire-and-forget** to maximize game loop performance. On-chain state may lag behind the relay's in-memory state at any given moment. Because of this, `end_match` does not check `status == Complete` — fire-and-forget round-end transactions may not have confirmed on ER yet.
 
-Because of this:
+**Derby** (`derbyRelay.ts`): Events are streamed in real-time as fire-and-forget for game loop performance, but every event promise is tracked. Before settlement, the server `Promise.allSettled()` waits for all in-flight events to confirm on ER, ensuring the committed PDA state reflects the full race. The `start_derby` transaction is also confirmed before the client begins streaming events.
 
-- **`end_match`** does not check `status == Complete`. The game server is authenticated via signer constraint and is trusted to decide when to settle. If we required `Complete`, the settlement would fail whenever fire-and-forget round-end transactions hadn't been confirmed on ER yet.
-- **`close_match` / `close_player_state`** do not check match status. The game server can close PDAs at any time after settlement to reclaim rent (~0.002 SOL per match).
+Both modes:
+- **`end_match` / `end_derby`** do not check completion status. The game server decides when to settle.
+- **`close_match` / `close_derby` / `close_player_state`** do not check status. The game server can close PDAs at any time after settlement to reclaim rent.
 
 ### ER Settlement Flow
 
