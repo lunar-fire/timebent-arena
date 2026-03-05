@@ -2,7 +2,7 @@
 
 [timebent.xyz](https://www.timebent.xyz/) | [𝕏 @TimebentGame](https://x.com/TimebentGame)
 
-Solana Anchor program for Timebent - The Academy - an on-chain PVE and PVP arena, powered by [MagicBlock Ephemeral Rollups](https://docs.magicblock.gg/) for real-time gameplay.
+Solana Anchor program for Timebent - The Academy - an on-chain PVE/PVP arena and derby racing, powered by [MagicBlock Ephemeral Rollups](https://docs.magicblock.gg/) for real-time on-chain gameplay.
 
 This repo contains the smart contract only. It is **not** a deployable service — it compiles to a Solana BPF program and is deployed directly to the blockchain.
 
@@ -10,18 +10,20 @@ This repo contains the smart contract only. It is **not** a deployable service �
 
 ```
 Game Client (Godot)
-  |  WebSocket
+  |  WebSocket (real-time)
   v
-API Relay (timebent-api/matchRelay.ts) -- 20Hz tick loop
+API Relay (timebent-api)
+  |  matchRelay.ts -- Arena 20Hz tick loop
+  |  derbyRelay.ts -- Derby event streaming
   |  Solana transactions
   v
 This Program (arena_match) -- on MagicBlock ER validator
   |  Delegation / Commit
   v
-Solana L1 (devnet / mainnet) -- persistent match results
+Solana L1 (devnet / mainnet) -- persistent results + verifiable hashes
 ```
 
-The API relay (`timebent-api`) builds and submits transactions to this program via `erArenaTransactions.ts`. The game client never calls the program directly.
+Both Arena matches and Derby races run entirely on-chain via Ephemeral Rollups. The API relay builds and submits transactions to this program — the game client never calls the program directly. Every game action (player input, damage, collision, pickup, checkpoint) is a Solana transaction on the ER validator, committed to L1 at settlement.
 
 ## Program ID
 
@@ -83,15 +85,25 @@ create_match (L1)
 
 ## Derby Lifecycle
 
+Derby races stream every game event to the ER in real-time as it happens during the race. Each collision, gold pickup, boost pickup, checkpoint, lap completion, and finish is an individual Solana transaction on the ER — the on-chain PDA state updates live throughout the race, not just at settlement.
+
 ```
 create_derby (L1)
   -> delegate_derby (L1 -> ER)
-  -> start_derby (ER)
-  -> [submit_derby_input / derby_server_update loop] (ER)
-  -> derby_server_update(FinishRace) (ER)
+  -> start_derby (ER) -- confirmed before client streams events
+  -> [real-time event streaming via WebSocket] (ER)
+     - derby_server_update(RecordCollision)
+     - derby_server_update(CollectGold)
+     - derby_server_update(CollectBoost)
+     - derby_server_update(PassCheckpoint)
+     - derby_server_update(CompleteLap)
+     - derby_server_update(FinishRace)
+  -> Promise.allSettled (wait for all in-flight events)
   -> end_derby (ER -> L1, commit + undelegate)
   -> close_derby (L1, emit result hash, reclaim rent)
 ```
+
+The ER PDA counters (`collisions`, `gold_collected`, `boosts_collected`, `current_lap`, etc.) reflect the true race state at every point during the race — not just the final snapshot.
 
 ## Account Types
 
@@ -278,13 +290,33 @@ Because of this:
 
 ### ER Settlement Flow
 
-The `end_match` instruction uses the `#[commit]` macro which injects `magic_program` and `magic_context` accounts. Internally it calls `commit_and_undelegate_accounts` as a **CPI** to the MagicBlock Magic Program. This must be a CPI (not a top-level instruction) because the Magic Program needs to detect the parent program ID from the call stack.
+The `end_match` / `end_derby` instructions use the `#[commit]` macro which injects `magic_program` and `magic_context` accounts. Internally it calls `commit_and_undelegate_accounts` as a **CPI** to the MagicBlock Magic Program. This must be a CPI (not a top-level instruction) because the Magic Program needs to detect the parent program ID from the call stack.
 
 On the TypeScript side, the `#[commit]` macro injects accounts in this order:
 1. `magic_program` (`Magic11111111111111111111111111111111111111`)
 2. `magic_context` (`MagicContext1111111111111111111111111111111`)
 
-After `end_match` confirms on ER, the relay calls `GetCommitmentSignature()` from `@magicblock-labs/ephemeral-rollups-sdk` to await the L1 commitment signature. This parses the `"ScheduledCommitSent signature: ..."` log from the Magic Program's CPI response and waits for the corresponding L1 transaction to confirm.
+After `end_match` / `end_derby` confirms on ER, the relay calls `GetCommitmentSignature()` from `@magicblock-labs/ephemeral-rollups-sdk` to await the L1 commitment signature. This parses the `"ScheduledCommitSent signature: ..."` log from the Magic Program's CPI response and waits for the corresponding L1 transaction to confirm.
+
+### Derby Real-Time Event Streaming
+
+Unlike the Arena's 20Hz server-driven tick loop, Derby events are driven by the game client and streamed to the ER in real-time via WebSocket (`derbyRelay.ts`).
+
+**How it works:**
+
+1. **Setup** (`POST /derby/setup`): Creates PDA on L1, delegates to ER, sends `start_derby` — all server-side, fire-and-forget from the client.
+2. **WS Connect** (`/ws/derby`): Client connects after entering the race zone. The server confirms `start_derby` has landed on ER before sending `DERBY_JOINED`, preventing events from arriving before the PDA is in `Racing` status.
+3. **Event Streaming**: Each game event (collision, gold pickup, boost, checkpoint, lap, finish) is sent as a `DERBY_EVENT` WebSocket message. The server builds a `derby_server_update` transaction and submits it to the ER. Events are fire-and-forget for game loop performance, but every promise is tracked.
+4. **Settlement**: On `DERBY_FINISH`, the server `Promise.allSettled()` waits for all in-flight event transactions to confirm on ER, then calls `end_derby` (commit + undelegate) and `close_derby` (result hash + rent reclaim).
+
+**On-chain integrity guarantees:**
+
+- `start_derby` confirmed before any events stream → no `RaceNotActive` rejections
+- All event promises awaited before `end_derby` → no race condition between events and undelegation
+- Bitmask idempotency guards (`gold_bitmask`, `boost_bitmask`) prevent double-counting even if duplicate events arrive
+- Result hash computed from committed PDA state + close_derby arguments → verifiable on L1 transaction logs
+
+**Fallback:** If the WebSocket never connects or disconnects mid-race, the client falls back to the HTTP batch path (`POST /derby/settle`) which submits all events at once before settlement.
 
 ### ER Validator
 
@@ -343,6 +375,6 @@ close_match    -> PDA closed, rent returned to game server
 
 | Repo | Role |
 |------|------|
-| `timebent-api` | Relay server — WebSocket match loop, `erArenaTransactions.ts` builds + sends txs to this program |
-| `timebent-oracle` | Match history API — records results in MongoDB |
-| `timebent-game` | Game client — renders arena, sends player input over WebSocket |
+| `timebent-api` | Relay server — `matchRelay.ts` (arena 20Hz tick loop), `derbyRelay.ts` (derby event streaming), `erArenaTransactions.ts` + `derbyTransactions.ts` build + send txs to this program |
+| `timebent-oracle` | Match/race history API — records results in MongoDB |
+| `timebent-game` | Game client — renders arena/derby, sends player input over WebSocket |
