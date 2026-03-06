@@ -203,7 +203,7 @@ The ER PDA counters (`collisions`, `gold_collected`, `boosts_collected`, `curren
 | CollectBoost | item_index: u8 | Collect speed boost (0-7) |
 | PassCheckpoint | checkpoint_id: u8 | Pass checkpoint (0-3) |
 | CompleteLap | — | Complete a lap (requires all 4 checkpoints) |
-| FinishRace | — | Finish race (requires 3 laps complete) |
+| FinishRace | tick: u32 | Finish race (requires 3 laps complete, sets finish_tick) |
 
 ### DerbyError
 
@@ -315,7 +315,7 @@ Unlike the Arena's 20Hz server-driven tick loop, Derby events are driven by the 
 - `start_derby` confirmed before any events stream → no `RaceNotActive` rejections
 - All event promises awaited before `end_derby` → no race condition between events and undelegation
 - Bitmask idempotency guards (`gold_bitmask`, `boost_bitmask`) prevent double-counting even if duplicate events arrive
-- Result hash computed from committed PDA state + close_derby arguments → verifiable on L1 transaction logs
+- Result hash computed entirely from committed PDA state (all fields read from on-chain) → verifiable on L1 transaction logs
 
 **Fallback:** If the WebSocket never connects or disconnects mid-race, the client falls back to the HTTP batch path (`POST /derby/settle`) which submits all events at once before settlement.
 
@@ -336,13 +336,13 @@ When `close_derby` is called, the program computes a SHA256 hash of the race res
 | race_id | u64 LE | PDA |
 | player | 32 bytes | PDA |
 | vrf_seed | 32 bytes | PDA |
-| finish_tick | u32 LE | Instruction arg (ER→L1 commit unreliable) |
+| finish_tick | u32 LE | PDA |
 | current_lap | u8 | PDA |
 | collisions | u16 LE | PDA |
-| gold_collected | u8 | Instruction arg (ER→L1 commit unreliable) |
+| gold_collected | u8 | PDA |
 | boosts_collected | u8 | PDA |
-| gold_bitmask | u16 LE | Instruction arg (ER→L1 commit unreliable) |
-| boost_bitmask | u8 | Instruction arg (ER→L1 commit unreliable) |
+| gold_bitmask | u16 LE | PDA |
+| boost_bitmask | u8 | PDA |
 
 **Log format:**
 ```
