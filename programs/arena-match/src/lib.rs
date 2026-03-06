@@ -455,10 +455,11 @@ pub mod arena_match {
                 d.checkpoints_passed = 0; // reset for next lap
                 msg!("Derby {}: lap {} complete", d.race_id, d.current_lap);
             }
-            DerbyAction::FinishRace => {
+            DerbyAction::FinishRace { tick } => {
                 require!(d.current_lap >= DERBY_MAX_LAPS, DerbyError::LapsNotComplete);
+                require!(tick <= DERBY_MAX_TICKS, DerbyError::RaceTimedOut);
                 d.status = DerbyStatus::Finished;
-                d.finish_tick = d.current_tick;
+                d.finish_tick = tick;
                 d.settled_at = Clock::get()?.unix_timestamp;
                 msg!("Derby {}: finished at tick {}", d.race_id, d.finish_tick);
             }
@@ -498,27 +499,22 @@ pub mod arena_match {
     pub fn close_derby(
         ctx: Context<CloseDerby>,
         _race_id: u64,
-        finish_tick: u32,
-        gold_collected: u8,
-        gold_bitmask: u16,
-        boost_bitmask: u8,
     ) -> Result<()> {
         let d = &ctx.accounts.derby_race;
 
         // Build deterministic byte representation of race result.
-        // finish_tick, gold_collected, gold_bitmask, boost_bitmask are passed as
-        // args because the ER→L1 commit does not reliably propagate these fields.
+        // All fields read from the PDA (committed from ER via MagicBlock delegation).
         let mut data = Vec::with_capacity(85);
         data.extend_from_slice(&d.race_id.to_le_bytes());
         data.extend_from_slice(d.player.as_ref());
         data.extend_from_slice(&d.vrf_seed);
-        data.extend_from_slice(&finish_tick.to_le_bytes());
+        data.extend_from_slice(&d.finish_tick.to_le_bytes());
         data.extend_from_slice(&[d.current_lap]);
         data.extend_from_slice(&d.collisions.to_le_bytes());
-        data.extend_from_slice(&[gold_collected]);
+        data.extend_from_slice(&[d.gold_collected]);
         data.extend_from_slice(&[d.boosts_collected]);
-        data.extend_from_slice(&gold_bitmask.to_le_bytes());
-        data.extend_from_slice(&[boost_bitmask]);
+        data.extend_from_slice(&d.gold_bitmask.to_le_bytes());
+        data.extend_from_slice(&[d.boost_bitmask]);
 
         let hash = solana_sha256_hasher::hash(&data);
         msg!("Derby {} result: hash={}", d.race_id, hash);
@@ -637,7 +633,7 @@ pub enum DerbyAction {
     CollectBoost { item_index: u8 },
     PassCheckpoint { checkpoint_id: u8 },
     CompleteLap,
-    FinishRace,
+    FinishRace { tick: u32 },
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
