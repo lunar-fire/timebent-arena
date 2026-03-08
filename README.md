@@ -31,9 +31,10 @@ Both Arena matches and Derby races run entirely on-chain via Ephemeral Rollups. 
 45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi
 ```
 
-[View on Solscan (devnet)](https://solscan.io/account/45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi?cluster=devnet)
+Deployed on both devnet and mainnet. Anchor IDL published on-chain for both.
 
-Anchor Program IDL published and available at the [Anchor Program IDL tab](https://solscan.io/account/45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi?cluster=devnet#anchorProgramIdl).
+- [View on Solscan (devnet)](https://solscan.io/account/45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi?cluster=devnet)
+- [View on Solscan (mainnet)](https://solscan.io/account/45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi)
 
 ## Instructions
 
@@ -41,7 +42,7 @@ Anchor Program IDL published and available at the [Anchor Program IDL tab](https
 
 | # | Instruction | Signer | Where | Purpose |
 |---|-------------|--------|-------|---------|
-| 1 | `create_match` | game server | L1 | Create ArenaMatchState PDA |
+| 1 | `create_match` | game server + player1 | L1 | Create ArenaMatchState PDA |
 | 2 | `join_match` | player2 (or session key) | ER | Player 2 joins, sets Countdown |
 | 3 | `start_round` | game server | ER | Transition to Active, reset HP |
 | 4 | `submit_input` | player (or session key) | ER | Player movement + attack input |
@@ -60,7 +61,7 @@ Anchor Program IDL published and available at the [Anchor Program IDL tab](https
 
 | # | Instruction | Signer | Where | Purpose |
 |---|-------------|--------|-------|---------|
-| 15 | `create_derby` | player | L1 | Create DerbyRaceState PDA |
+| 15 | `create_derby` | game server + player | L1 | Create DerbyRaceState PDA |
 | 16 | `delegate_derby` | game server | L1 | Delegate derby PDA to ER validator |
 | 17 | `start_derby` | game server | ER | Start race (Created -> Racing) |
 | 18 | `submit_derby_input` | player (or session key) | ER | Player movement input |
@@ -255,8 +256,12 @@ anchor build --no-idl
 # Deploy to devnet
 anchor deploy --provider.cluster devnet --provider.wallet ~/.config/solana/id.json
 
+# Deploy to mainnet (upgrade)
+anchor deploy --provider.cluster mainnet --provider.wallet ~/.config/solana/id.json
+
 # Verify
 solana program show 45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi --url devnet
+solana program show 45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi --url mainnet-beta
 ```
 
 ### Test
@@ -321,9 +326,10 @@ Unlike the Arena's 20Hz server-driven tick loop, Derby events are driven by the 
 
 ### ER Validator
 
-| Network | Validator | Endpoint |
-|---------|-----------|----------|
-| Devnet | `MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd` | `https://devnet-us.magicblock.app/` |
+| Network | Region | Validator | Endpoint |
+|---------|--------|-----------|----------|
+| Devnet | US | `MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd` | `https://devnet-us.magicblock.app/` |
+| Mainnet | US | `MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd` | `https://us.magicblock.app/` |
 
 ### Derby Result Hash Verification
 
