@@ -379,3 +379,9 @@ close_match    -> PDA closed, rent returned to game server
 | `timebent-api` | Relay server — `matchRelay.ts` (arena 20Hz tick loop), `derbyRelay.ts` (derby event streaming), `erArenaTransactions.ts` + `derbyTransactions.ts` build + send txs to this program |
 | `timebent-oracle` | Match/race history API — records results in MongoDB |
 | `timebent-game` | Game client — renders arena/derby, sends player input over WebSocket |
+
+## License
+
+[Apache 2.0](./LICENSE)
+
+Apache 2.0 license applies from March 7, 2026 onward. Prior clones are covered by the same terms at the author's discretion.

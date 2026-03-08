@@ -651,8 +651,7 @@ pub struct CreateMatch<'info> {
         bump
     )]
     pub arena_match: Account<'info, ArenaMatchState>,
-    /// CHECK: Game server authority — stored in match state
-    pub game_server: AccountInfo<'info>,
+    pub game_server: Signer<'info>,
     #[account(mut)]
     pub player1: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -830,8 +829,7 @@ pub struct CreateDerby<'info> {
         bump
     )]
     pub derby_race: Account<'info, DerbyRaceState>,
-    /// CHECK: Game server authority — stored in race state
-    pub game_server: AccountInfo<'info>,
+    pub game_server: Signer<'info>,
     #[account(mut)]
     pub player: Signer<'info>,
     pub system_program: Program<'info, System>,
