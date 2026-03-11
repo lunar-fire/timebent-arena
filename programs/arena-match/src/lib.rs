@@ -10,13 +10,15 @@ declare_id!("45A9Qb4YVeWwL35aBCTcT4bcfsgcFUW3GUHAbvhNJJGi");
 pub const MATCH_SEED: &[u8] = b"arena_match";
 pub const PLAYER_STATE_SEED: &[u8] = b"player_state";
 
-// ── Game Constants (mirror MATCH_CONFIG from TypeScript relay) ──────────────
+// ── Game Constants (defaults — relay can override via create_match args) ──────
+pub const DEFAULT_HP_PER_ROUND: u8 = 5;
+pub const MAX_HP_PER_ROUND: u8 = 20; // Safety cap
 pub const MAX_ROUNDS: u8 = 3;
 pub const WINS_NEEDED: u8 = 2;
-pub const HP_PER_ROUND: u8 = 5;
 pub const ROUND_TICKS: u32 = 1200; // 60s × 20Hz
 pub const DAMAGE_COOLDOWN_TICKS: u32 = 10; // ~500ms between hits
 pub const MAX_DAMAGE_PER_HIT: u8 = 1;
+pub const MAX_PLAYERS: u8 = 4; // Safety cap for future modes
 
 // ── Derby Seeds ──────────────────────────────────────────────────────────
 pub const DERBY_SEED: &[u8] = b"derby_race";
@@ -41,26 +43,52 @@ pub mod arena_match {
     use super::*;
 
     // ── 1. Create match (on L1) ────────────────────────────────────────────
-    pub fn create_match(ctx: Context<CreateMatch>, match_id: u64) -> Result<()> {
+    pub fn create_match(
+        ctx: Context<CreateMatch>,
+        match_id: u64,
+        game_mode: u8,
+        hp_per_round: u8,
+        max_players: u8,
+    ) -> Result<()> {
         let m = &mut ctx.accounts.arena_match;
+
+        // Validate and clamp config
+        let hp = if hp_per_round == 0 || hp_per_round > MAX_HP_PER_ROUND {
+            DEFAULT_HP_PER_ROUND
+        } else {
+            hp_per_round
+        };
+        let players = if max_players == 0 || max_players > MAX_PLAYERS {
+            2
+        } else {
+            max_players
+        };
+
         m.match_id = match_id;
         m.game_server = ctx.accounts.game_server.key();
         m.player1 = ctx.accounts.player1.key();
         m.player2 = Pubkey::default();
         m.status = MatchStatus::WaitingForPlayer;
+        m.game_mode = game_mode;
+        m.hp_per_round = hp;
+        m.max_players = players;
         m.current_round = 0;
         m.player1_rounds_won = 0;
         m.player2_rounds_won = 0;
-        m.player1_hp = HP_PER_ROUND;
-        m.player2_hp = HP_PER_ROUND;
+        m.player1_hp = hp;
+        m.player2_hp = hp;
         m.current_tick = 0;
         m.round_start_tick = 0;
         m.last_p1_damage_tick = 0;
         m.last_p2_damage_tick = 0;
+        m.team1_score = 0;
+        m.team2_score = 0;
+        m.objective_state = 0;
         m.winner = Pubkey::default();
         m.created_at = Clock::get()?.unix_timestamp;
         m.settled_at = 0;
-        msg!("Match {} created by {} (server: {})", match_id, m.player1, m.game_server);
+        msg!("Match {} created (mode={}, hp={}, players={}) by {} (server: {})",
+            match_id, game_mode, hp, players, m.player1, m.game_server);
         Ok(())
     }
 
@@ -80,8 +108,8 @@ pub mod arena_match {
         m.current_round = 1;
         m.current_tick = 0;
         m.round_start_tick = 0;
-        m.player1_hp = HP_PER_ROUND;
-        m.player2_hp = HP_PER_ROUND;
+        m.player1_hp = m.hp_per_round;
+        m.player2_hp = m.hp_per_round;
         msg!("Player {} joined match {}", p2, m.match_id);
         Ok(())
     }
@@ -95,8 +123,8 @@ pub mod arena_match {
         );
         m.status = MatchStatus::Active;
         m.round_start_tick = m.current_tick;
-        m.player1_hp = HP_PER_ROUND;
-        m.player2_hp = HP_PER_ROUND;
+        m.player1_hp = m.hp_per_round;
+        m.player2_hp = m.hp_per_round;
         m.last_p1_damage_tick = 0;
         m.last_p2_damage_tick = 0;
         msg!("Round {} started at tick {}", m.current_round, m.current_tick);
@@ -233,6 +261,46 @@ pub mod arena_match {
 
         m.status = MatchStatus::Complete;
         m.settled_at = Clock::get()?.unix_timestamp;
+        Ok(())
+    }
+
+    // ── 7b. Capture objective (server only, on ER) ─────────────────────────
+    // Generic objective action: CTF orb capture, raid boss phase change, etc.
+    // The relay interprets objective_state based on game_mode.
+    pub fn capture_objective(
+        ctx: Context<ServerAction>,
+        _match_id: u64,
+        player_slot: u8,
+        new_state: u8,
+    ) -> Result<()> {
+        let m = &mut ctx.accounts.arena_match;
+        require!(m.status == MatchStatus::Active, ArenaError::MatchNotActive);
+        m.objective_state = new_state;
+        msg!("Objective captured by slot {} -> state {}", player_slot, new_state);
+        Ok(())
+    }
+
+    // ── 7c. Score point (server only, on ER) ─────────────────────────────
+    // Generic scoring beyond HP: CTF capture points, raid damage totals, etc.
+    pub fn score_point(
+        ctx: Context<ServerAction>,
+        _match_id: u64,
+        team: u8,      // 1 = team1, 2 = team2
+        amount: u16,
+    ) -> Result<()> {
+        let m = &mut ctx.accounts.arena_match;
+        require!(m.status == MatchStatus::Active, ArenaError::MatchNotActive);
+        match team {
+            1 => {
+                m.team1_score = m.team1_score.saturating_add(amount);
+                msg!("Team 1 scored {} (total: {})", amount, m.team1_score);
+            }
+            2 => {
+                m.team2_score = m.team2_score.saturating_add(amount);
+                msg!("Team 2 scored {} (total: {})", amount, m.team2_score);
+            }
+            _ => return Err(ArenaError::InvalidTargetSlot.into()),
+        }
         Ok(())
     }
 
@@ -534,6 +602,9 @@ pub struct ArenaMatchState {
     pub player1: Pubkey,          // 32
     pub player2: Pubkey,          // 32
     pub status: MatchStatus,      // 1
+    pub game_mode: u8,            // 1 — 0=duel, 1=orb_clash, 2=pve_raid
+    pub hp_per_round: u8,         // 1 — configurable per match (relay decides)
+    pub max_players: u8,          // 1 — 2 for duel/CTF, 1-4 for raids
     pub current_round: u8,        // 1
     pub player1_rounds_won: u8,   // 1
     pub player2_rounds_won: u8,   // 1
@@ -543,13 +614,17 @@ pub struct ArenaMatchState {
     pub round_start_tick: u32,    // 4
     pub last_p1_damage_tick: u32, // 4
     pub last_p2_damage_tick: u32, // 4
+    pub team1_score: u16,         // 2 — CTF capture points, raid damage, etc.
+    pub team2_score: u16,         // 2
+    pub objective_state: u8,      // 1 — CTF orb carrier slot, raid boss phase
     pub winner: Pubkey,           // 32
     pub created_at: i64,          // 8
     pub settled_at: i64,          // 8
 }
+// Total: 8+32+32+32+1+1+1+1+1+1+1+1+1+4+4+4+4+2+2+1+32+8+8 = 182
 
 impl ArenaMatchState {
-    pub const LEN: usize = 8 + 32 + 32 + 32 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 4 + 4 + 4 + 32 + 8 + 8;
+    pub const LEN: usize = 8 + 32 + 32 + 32 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 4 + 4 + 4 + 2 + 2 + 1 + 32 + 8 + 8;
 }
 
 #[account]
@@ -641,7 +716,7 @@ pub enum DerbyAction {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Accounts)]
-#[instruction(match_id: u64)]
+#[instruction(match_id: u64, game_mode: u8, hp_per_round: u8, max_players: u8)]
 pub struct CreateMatch<'info> {
     #[account(
         init,
