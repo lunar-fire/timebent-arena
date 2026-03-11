@@ -13,7 +13,7 @@ pub const PLAYER_STATE_SEED: &[u8] = b"player_state";
 // ── Game Constants (mirror MATCH_CONFIG from TypeScript relay) ──────────────
 pub const MAX_ROUNDS: u8 = 3;
 pub const WINS_NEEDED: u8 = 2;
-pub const HP_PER_ROUND: u8 = 3;
+pub const HP_PER_ROUND: u8 = 5;
 pub const ROUND_TICKS: u32 = 1200; // 60s × 20Hz
 pub const DAMAGE_COOLDOWN_TICKS: u32 = 10; // ~500ms between hits
 pub const MAX_DAMAGE_PER_HIT: u8 = 1;

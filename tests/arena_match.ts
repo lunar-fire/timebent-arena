@@ -14,7 +14,7 @@ const MATCH_SEED = Buffer.from("arena_match");
 const PLAYER_STATE_SEED = Buffer.from("player_state");
 
 // Game constants (must match program)
-const HP_PER_ROUND = 3;
+const HP_PER_ROUND = 5;
 const DAMAGE_COOLDOWN_TICKS = 10;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

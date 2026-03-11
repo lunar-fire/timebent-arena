@@ -170,7 +170,7 @@ The ER PDA counters (`collisions`, `gold_collected`, `boosts_collected`, `curren
 |----------|-------|-------------|
 | MAX_ROUNDS | 3 | Best of 3 |
 | WINS_NEEDED | 2 | First to 2 wins |
-| HP_PER_ROUND | 3 | Health per round |
+| HP_PER_ROUND | 5 | Health per round |
 | ROUND_TICKS | 1200 | 60 seconds at 20Hz |
 | DAMAGE_COOLDOWN_TICKS | 10 | ~500ms between hits |
 
