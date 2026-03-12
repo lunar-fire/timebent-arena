@@ -93,8 +93,10 @@ pub mod arena_match {
     }
 
     // ── 2. Join match (on ER after delegation) ─────────────────────────────
+    // Allow player2 directly OR game server (match authority) on behalf of player2
     #[session_auth_or(
-        ctx.accounts.payer.key() == ctx.accounts.player2.key(),
+        ctx.accounts.payer.key() == ctx.accounts.player2.key()
+            || ctx.accounts.payer.key() == ctx.accounts.arena_match.game_server,
         SessionError::InvalidToken
     )]
     pub fn join_match(ctx: Context<JoinMatch>, _match_id: u64) -> Result<()> {
